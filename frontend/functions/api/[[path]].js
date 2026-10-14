@@ -36,7 +36,10 @@ export async function onRequest({ request, env }) {
 
   try {
     const response = await fetch(upstreamRequest, { redirect: 'manual' });
-    return response;
+    const safeResponse = new Response(response.body, response);
+    // Não armazenar respostas da API, que podem incluir dados de pacientes.
+    safeResponse.headers.set('Cache-Control', 'no-store');
+    return safeResponse;
   } catch {
     return Response.json(
       { error: 'API temporariamente indisponível.' },
