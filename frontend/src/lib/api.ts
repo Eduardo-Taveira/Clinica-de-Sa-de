@@ -36,7 +36,7 @@ export class ApiError extends Error {
   }
 }
 
-const baseUrl = (import.meta.env.VITE_API_URL ?? 'http://localhost:3333').replace(/\/$/, '');
+const baseUrl = (import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '/api' : 'http://localhost:3333')).replace(/\/$/, '');
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   let response: Response;
