@@ -21,7 +21,7 @@ app.use(cookieParser());
 app.use((req, _res, next) => {
   if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
     const origin = req.get("origin");
-    if (origin && origin !== frontendOrigin) return next(new HttpError(403, "Origem não permitida."));
+    if (origin !== frontendOrigin) return next(new HttpError(403, "Origem não permitida."));
   }
   next();
 });
