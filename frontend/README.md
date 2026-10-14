@@ -4,7 +4,7 @@ Interface web para o teste técnico Full Stack, integrada à API já construída
 
 ## Tecnologias
 
-React 19, TypeScript, Vite 6, Tailwind CSS 3, React Router e Lucide.
+React 19, TypeScript, Vite 6, Tailwind CSS 3, React Router 7 e Lucide.
 
 ## Iniciar no Windows (PowerShell)
 
@@ -13,7 +13,7 @@ Com o backend rodando em `http://localhost:3333` e o PostgreSQL iniciado:
 ```powershell
 cd frontend
 Copy-Item .env.example .env
-npm install
+npm ci
 npm run dev
 ```
 
@@ -25,7 +25,7 @@ Abra **http://localhost:5173**. O frontend usa a variável `VITE_API_URL` para c
 - `/login`: login e sessão por cookie HttpOnly (`credentials: 'include'`);
 - `/dashboard`: resumo das consultas do usuário;
 - `/agendar`: calendário, consulta de horários livres e confirmação, com mensagens para feriados e horários ocupados;
-- `/minhas-consultas`: listagem das próprias reservas;
+- `/minhas-consultas`: listagem das próprias reservas e cancelamento de consultas futuras;
 - botão de sair da conta e proteção das páginas privadas.
 
 O frontend **não** armazena senha ou cookie de sessão em `localStorage`. O backend continua sendo a fonte de verdade para feriados, horários, autenticação e conflitos.
@@ -40,11 +40,13 @@ npm run preview     # serve o build local
 
 ## Dicas de teste
 
-1. Entre com o paciente que você já cadastrou no backend, `paciente.teste@example.com` e a senha utilizada no PowerShell.
-2. Abra **Agendar consulta**. Selecione `03/11/2026`: o slot das 09:00 não deve aparecer, pois já está reservado.
-3. Selecione um dia útil com horários livres e confirme uma reserva.
-4. Consulte o registro em **Minhas consultas** e no Prisma Studio.
-5. Teste logout, bloqueio de rotas e uma segunda tentativa de agendar o mesmo horário por outra conta.
+1. Com o backend, o PostgreSQL e o seed ativos, abra `http://localhost:5173/cadastro` e crie uma conta fictícia. O seed **não** cadastra pacientes.
+2. Faça login, confira o dashboard e abra **Agendar consulta**.
+3. Escolha especialidade, médico, unidade, um dia útil futuro e um horário disponível; confirme a reserva.
+4. Confira a reserva em **Minhas consultas** e teste **Cancelar** em uma consulta futura.
+5. Confira bloqueios de final de semana, feriado e horário já ocupado. Para avaliar isolamento entre pacientes, use duas contas distintas.
+
+O frontend e o backend esperam a origem exata `http://localhost:5173`; mutações feitas por clientes manuais também precisam enviar esse valor no cabeçalho `Origin`.
 
 ## Erros comuns
 
@@ -56,10 +58,15 @@ npm run preview     # serve o build local
 
 ## Limites atuais
 
-O teste não exige integração com WhatsApp nem painel administrativo. Ambos ficam fora do escopo inicial. A versão atual não oferece cancelamento ou alteração de consultas, pois o backend não possui essas rotas.
+O projeto demonstrativo não possui painel administrativo, integrações de mensagens nem remarcação de consultas. **O cancelamento de consultas futuras está implementado**; a ação exclui a reserva e libera o horário.
 
-## Atualização de responsividade e cancelamento
+## Responsividade e cancelamento
 
 Login e cadastro cabem na altura visível de notebooks/desktops de altura normal, sem rolagem. Em celulares, zoom alto e alturas extremas, a rolagem é permitida para preservar a acessibilidade.
 
-Em **Minhas consultas**, o paciente pode clicar em **Cancelar** numa consulta futura e confirmar em modal. A chamada `DELETE /appointments/:id` requer também o backend atualizado; não é preciso migration adicional.
+Em **Minhas consultas**, o paciente pode clicar em **Cancelar** numa consulta futura e confirmar em modal. A chamada `DELETE /appointments/:id` é protegida por autenticação e autorização no backend. O navegador envia automaticamente a origem autorizada.
+
+
+## Segurança e dependências
+
+A sessão usa cookie `HttpOnly` controlado pelo backend; a aplicação não armazena senhas ou tokens em `localStorage`. Após a atualização para React Router 7, `npm run typecheck` e `npm run build` foram executados com sucesso. Na auditoria local de 14/10/2026, `npm audit --omit=dev` retornou **0 vulnerabilidades reportadas**; `npm audit` completo ainda apontou **7 avisos (5 altos e 2 moderados)** em ferramentas de desenvolvimento ligadas ao Tailwind CSS 3. Esses alertas precisam de acompanhamento e não devem ser ignorados em uma implantação de produção.

@@ -8,7 +8,7 @@ Aplicação demonstrativa para cadastro de pacientes, consulta de especialidades
 
 | Camada | Tecnologias |
 | --- | --- |
-| Frontend | React 19, TypeScript, Vite 6, Tailwind CSS, React Router |
+| Frontend | React 19, TypeScript, Vite 6, Tailwind CSS 3, React Router 7 |
 | Backend | Node.js, Express 5, TypeScript, Zod |
 | Banco | PostgreSQL 16, Prisma ORM 6 |
 | API externa | [Nager.at](https://date.nager.at/) — feriados nacionais brasileiros |
@@ -32,7 +32,7 @@ Aplicação demonstrativa para cadastro de pacientes, consulta de especialidades
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) com Docker Compose
 - Acesso à internet para instalar dependências e consultar a API de feriados
 
-As instruções abaixo usam **Windows PowerShell**. Em Linux/macOS, utilize `cp` para copiar os arquivos `.env.example`.
+As instruções abaixo usam **Windows PowerShell**. Em Linux/macOS, utilize `cp` para copiar os arquivos `.env.example`. **Este é o guia de instalação para o recrutador:** não é necessário realizar deploy nem ter uma conta previamente cadastrada; o projeto roda localmente com backend, frontend e PostgreSQL.
 
 ## 1. Clonar o repositório
 
@@ -61,7 +61,7 @@ npm run db:seed
 npm run dev
 ```
 
-A API estará disponível em **http://localhost:3333**. Confira **http://localhost:3333/health**; o retorno esperado é `{"status":"ok"}`.
+A API estará disponível em **http://localhost:3333**. Confira **http://localhost:3333/health**; o retorno esperado é `{"status":"ok"}`. Mantenha esse terminal aberto. Caso o Prisma não consiga conectar ao PostgreSQL logo após subir o contêiner, aguarde alguns segundos, confira `docker compose ps` e repita `npx prisma migrate deploy`.
 
 O arquivo `backend/.env.example` contém credenciais exclusivamente demonstrativas, compatíveis com o serviço PostgreSQL definido em `backend/docker-compose.yml`. **Nunca publique seu arquivo `.env` real; altere as credenciais para qualquer ambiente não demonstrativo.**
 
@@ -105,7 +105,33 @@ npm run typecheck
 npm run build
 ```
 
-Os testes automatizados atuais do backend verificam regras de negócio; **não equivalem a testes de ponta a ponta** envolvendo banco, API e navegador.
+Os cinco testes automatizados atuais do backend verificam regras de negócio; **não equivalem a uma suíte completa de integração ou de ponta a ponta**. Cadastro, login, dashboard, agendamento e cancelamento também foram validados manualmente no navegador durante o desenvolvimento.
+
+## Segurança e validação
+
+A aplicação é uma **demonstração para avaliação técnica**, construída com controles como:
+
+- Senhas armazenadas como hash bcrypt; registro público cria somente pacientes.
+- Sessões persistidas no banco com tokens aleatórios; apenas o hash do token é armazenado. Cookie `HttpOnly`, `SameSite=Lax` e `Secure` quando `NODE_ENV=production`.
+- Autenticação obrigatória e consulta/cancelamento limitados ao paciente dono da reserva.
+- Helmet, CORS restrito à origem configurada e limite de requisições nas rotas de autenticação.
+- Verificação de origem para requisições `POST`, `PUT`, `PATCH` e `DELETE`: o cabeçalho `Origin` deve ser **exatamente** o valor de `FRONTEND_ORIGIN` (no ambiente local, `http://localhost:5173`). Requisições de escrita sem esse cabeçalho retornam `403`. O navegador envia o cabeçalho automaticamente; ao testar a API pelo PowerShell, Postman ou curl, informe-o manualmente.
+- Validação Zod, restrição única de horário por médico no banco de dados e bloqueio de datas/feriados indisponíveis.
+
+**Resultados obtidos em 14/10/2026 no ambiente local de validação:**
+
+| Verificação | Resultado |
+| --- | --- |
+| Testes de regras de negócio do backend (`npm test`) | 5/5 aprovados |
+| Auditoria automatizada da API local | 33/33 verificações aprovadas; 0 falhas |
+| Build do backend, typecheck e build do frontend | Concluídos |
+| `npm audit` no backend | 0 vulnerabilidades reportadas |
+| `npm audit --omit=dev` no frontend | 0 vulnerabilidades reportadas |
+| `npm audit` completo no frontend | 7 avisos remanescentes (5 altos e 2 moderados), associados a ferramentas de desenvolvimento do Tailwind CSS 3 |
+
+A auditoria de 33 verificações foi executada **localmente por script auxiliar, não incluído neste repositório**. Seus resultados não garantem ausência de vulnerabilidades e não substituem análise profissional ou testes de produção. Para auditorar novamente as dependências, execute `npm audit` nas pastas `backend/` e `frontend/`.
+
+**Uso e privacidade:** o catálogo, médicos e unidades são fictícios. Use dados de teste, não cadastros reais de pacientes. O `.env.example` e o Docker Compose contêm credenciais demonstrativas e **não devem ser reutilizados em produção**. Uma implantação real requer HTTPS, gerenciamento de segredos, configuração de cookies/origens, controles operacionais, privacidade e verificações adicionais.
 
 ## Endpoints REST principais
 
@@ -174,6 +200,7 @@ Clinica-de-Saude/
 | Tabelas inexistentes | Execute `npx prisma migrate deploy` dentro de `backend/` |
 | Catálogo vazio | Execute `npm run db:seed` dentro de `backend/` |
 | Erro de CORS ou cookie | Use `localhost:5173` e `localhost:3333`; confira `FRONTEND_ORIGIN` |
+| Resposta `403 Origem não permitida` em requisições manuais de escrita | Envie `Origin: http://localhost:5173` em `POST`/`PUT`/`PATCH`/`DELETE`; o valor deve coincidir com `FRONTEND_ORIGIN` |
 | Horários não carregam | API ativa, login válido e disponibilidade da Nager.at |
 | Portas `5432`, `3333` ou `5173` ocupadas | Encerre processos conflitantes ou adapte as configurações |
 | `npm` não reconhecido | Instale/atualize Node.js e reinicie o terminal |
