@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, CalendarCheck2, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Info, LoaderCircle, MapPin, ShieldCheck, Stethoscope, UserRound } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { ApiError, bookingApi, catalogApi, type Availability, type ClinicLocation, type Doctor, type Specialty } from '../lib/api';
@@ -87,10 +87,11 @@ export function BookingPage() {
   const confirmRef = useRef<HTMLElement>(null);
   const successRef = useRef<HTMLDivElement>(null);
 
-  // Só avança após uma interação do usuário; não rola a tela na abertura.
-  // Espera o React renderizar as seções condicionais antes de localizar o destino.
-  useEffect(() => {
+  // Desloca a tela somente depois de uma escolha do paciente. O efeito de
+  // layout garante que as etapas condicionais já existem quando rolamos.
+  useLayoutEffect(() => {
     if (!scrollRequest) return;
+
     const target = {
       specialty: specialtyRef.current,
       unit: unitRef.current,
@@ -103,14 +104,21 @@ export function BookingPage() {
     if (!target) return;
 
     const frame = window.requestAnimationFrame(() => {
+      if (!target.isConnected) return;
+
       const bounds = target.getBoundingClientRect();
-      // Evita movimento desnecessário em telas largas quando a próxima etapa
-      // já está inteiramente visível ao lado da anterior.
-      if (bounds.top >= 80 && bounds.bottom <= window.innerHeight - 24) return;
-      target.scrollIntoView({
+      // Reserva espaço para o cabeçalho fixo, evitando esconder o título da
+      // próxima etapa ao rolar em celulares ou notebooks.
+      const headerHeight = document.querySelector('header')?.getBoundingClientRect().height ?? 0;
+      const safeTop = headerHeight + 16;
+      const safeBottom = window.innerHeight - 24;
+
+      // Em telas largas, não move a página se o card já estiver visível.
+      if (bounds.top >= safeTop && bounds.bottom <= safeBottom) return;
+
+      window.scrollTo({
+        top: Math.max(0, window.scrollY + bounds.top - safeTop),
         behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
-        block: 'start',
-        inline: 'nearest',
       });
     });
 
@@ -179,7 +187,7 @@ export function BookingPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         <section ref={specialtyRef} className="panel scroll-mt-24"><div className="mb-5 flex items-center gap-3"><span className="step-number">1</span><div><h2 className="panel-title">Especialidade</h2><p className="text-sm text-slate-500">Que tipo de consulta você precisa?</p></div></div>
           <label htmlFor="specialty" className="mb-2 block text-xs font-bold text-navy-900">Escolha a especialidade</label>
-          <div className="relative"><Stethoscope className="pointer-events-none absolute left-4 top-3.5 text-sea-700" size={20}/><select id="specialty" className="w-full rounded-xl border border-slate-200 bg-white py-3.5 pl-12 pr-5 text-sm font-semibold text-navy-900 outline-none focus:border-sea-500" value={specialtyId} onChange={e => { setSpecialtyId(e.target.value); setDoctorId(''); setSuccess(null); if (e.target.value) setScrollRequest({ target: 'unit' }); }}><option value="">Selecione...</option>{specialties.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
+          <div className="relative"><Stethoscope className="pointer-events-none absolute left-4 top-3.5 text-sea-700" size={20}/><select id="specialty" className="w-full rounded-xl border border-slate-200 bg-white py-3.5 pl-12 pr-5 text-sm font-semibold text-navy-900 outline-none focus:border-sea-500" value={specialtyId} onChange={e => { setSpecialtyId(e.target.value); setDoctorId(''); setSuccess(null); if (e.target.value) setScrollRequest({ target: locationId ? 'doctor' : 'unit' }); }}><option value="">Selecione...</option>{specialties.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
         </section>
         <section ref={unitRef} className="panel scroll-mt-24"><div className="mb-5 flex items-center gap-3"><span className="step-number">2</span><div><h2 className="panel-title">Unidade de atendimento</h2><p className="text-sm text-slate-500">Onde você prefere ser atendido?</p></div></div>
           <div className="space-y-2.5">{locations.map(loc => <button key={loc.id} type="button" aria-pressed={locationId === loc.id} onClick={() => { setLocationId(loc.id); setDoctorId(''); setSuccess(null); setScrollRequest({ target: specialtyId ? 'doctor' : 'specialty' }); }} className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition ${locationId === loc.id ? 'border-sea-600 bg-sea-50' : 'border-slate-200 hover:border-sea-300 hover:bg-slate-50'}`}><MapPin size={19} className="shrink-0 text-sea-700"/><span className="min-w-0 flex-1"><span className="block text-sm font-extrabold text-navy-900">{loc.name}</span><span className="text-xs text-slate-500">{loc.neighborhood} · {loc.city}</span></span>{locationId === loc.id && <CheckCircle2 size={18} className="text-sea-700"/>}</button>)}</div>
