@@ -1,0 +1,100 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  PATIENT
+  ADMIN
+}
+
+model User {
+  id           String        @id @default(uuid())
+  name         String        @db.VarChar(100)
+  email        String        @unique @db.VarChar(254)
+  passwordHash String
+  role         Role          @default(PATIENT)
+  createdAt    DateTime      @default(now())
+  appointments Appointment[]
+  sessions     Session[]
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique @db.VarChar(64)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Specialty {
+  id      String   @id @default(uuid())
+  name    String   @unique @db.VarChar(90)
+  doctors Doctor[]
+}
+
+model ClinicLocation {
+  id           String           @id @default(uuid())
+  name         String           @db.VarChar(100)
+  city         String           @db.VarChar(90)
+  neighborhood String           @db.VarChar(90)
+  address      String?          @db.VarChar(250)
+  active       Boolean          @default(true)
+  doctors      DoctorLocation[]
+  appointments Appointment[]
+}
+
+model Doctor {
+  id           String           @id @default(uuid())
+  name         String           @db.VarChar(120)
+  registration String           @unique @db.VarChar(32) // identificador fictício no ambiente demo
+  specialtyId  String
+  specialty    Specialty        @relation(fields: [specialtyId], references: [id])
+  active       Boolean          @default(true)
+  locations    DoctorLocation[]
+  appointments Appointment[]
+
+  @@index([specialtyId, active])
+}
+
+// Cada vínculo determina em quais dias da semana o médico atende naquela unidade.
+// weekday: 1=segunda ... 5=sexta. O expediente continua 08h às 18h (1h por consulta).
+model DoctorLocation {
+  id         String         @id @default(uuid())
+  doctorId   String
+  locationId String
+  weekdays   Int[]
+  doctor     Doctor         @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  location   ClinicLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@unique([doctorId, locationId])
+  @@index([locationId])
+}
+
+model Appointment {
+  id         String         @id @default(uuid())
+  userId     String
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date       DateTime       @db.Date
+  startTime  String         @db.VarChar(5)
+  createdAt  DateTime       @default(now())
+  // Nullable APENAS para permitir a migração sem apagar as consultas da V2.
+  // O seed da V3 associa registros legados ao médico/unidade padrão.
+  doctorId   String?
+  locationId String?
+  doctor     Doctor?        @relation(fields: [doctorId], references: [id])
+  location   ClinicLocation? @relation(fields: [locationId], references: [id])
+
+  // Mesmo médico não pode atender simultaneamente em duas unidades.
+  @@unique([doctorId, date, startTime], name: "unique_doctor_appointment_slot")
+  @@index([userId, date])
+  @@index([locationId, date])
+}
