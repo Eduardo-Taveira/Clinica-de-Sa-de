@@ -4,6 +4,10 @@
 
 Aplicação demonstrativa para cadastro de pacientes, consulta de especialidades e médicos, verificação de horários disponíveis e agendamento de consultas. Os profissionais, registros e unidades do catálogo são **fictícios**.
 
+**[Acessar demonstração online — Vida Clínica](https://clinica-de-saude.pages.dev/)**
+
+A versão online está publicada na **Cloudflare Pages**, com API hospedada no **Render** e banco **Neon PostgreSQL**. Para avaliar o projeto sem instalar nada, utilize o link acima e crie uma conta fictícia. Para executar localmente com um banco independente, siga as instruções abaixo.
+
 ## Tecnologias
 
 | Camada | Tecnologias |
@@ -29,7 +33,7 @@ Aplicação demonstrativa para cadastro de pacientes, consulta de especialidades
 
 - [Git](https://git-scm.com/)
 - [Node.js](https://nodejs.org/) **20.19 ou superior**, com npm
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) com Docker Compose
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) com Docker Compose **(recomendado)** ou PostgreSQL 16 instalado localmente
 - Acesso à internet para instalar dependências e consultar a API de feriados
 
 As instruções abaixo usam **Windows PowerShell**. Em Linux/macOS, utilize `cp` para copiar os arquivos `.env.example`. **Este é o guia de instalação para o recrutador:** não é necessário realizar deploy nem ter uma conta previamente cadastrada; o projeto roda localmente com backend, frontend e PostgreSQL.
@@ -43,27 +47,95 @@ cd Clinica-de-Saude
 
 Se o repositório estiver privado, solicite acesso antes de cloná-lo.
 
-## 2. Iniciar o backend e banco de dados
+## 2. Configurar o PostgreSQL e iniciar o backend
 
-Na pasta raiz do projeto, abra o PowerShell e execute:
+**Escolha apenas uma das opções a seguir para o banco de dados.** A opção A (Docker Compose) é a mais simples para reproduzir o projeto e não exige instalar PostgreSQL no Windows. A opção B é destinada a quem já utiliza PostgreSQL nativo. Ambas executam o backend em `http://localhost:3333` e **não acessam o banco da demonstração online**.
+
+### Opção A — PostgreSQL com Docker Compose (recomendado)
+
+1. Abra o **Docker Desktop** e aguarde o serviço ficar ativo.
+2. Na pasta raiz do repositório, abra o **PowerShell** e execute:
 
 ```powershell
 cd backend
 Copy-Item .env.example .env
 npm ci
-
 docker compose up -d
+docker compose ps
+```
 
+O arquivo `backend/docker-compose.yml` configura automaticamente um PostgreSQL 16 com as **credenciais demonstrativas locais** abaixo:
+
+| Configuração | Valor usado apenas no ambiente local |
+| --- | --- |
+| Host / porta | `localhost:5432` |
+| Banco | `clinica_agendamentos` |
+| Usuário | `clinica_user` |
+| Senha | `clinica_password` |
+| String de conexão | `postgresql://clinica_user:clinica_password@localhost:5432/clinica_agendamentos?schema=public` |
+
+Esses valores já correspondem ao `DATABASE_URL` de `backend/.env.example`; **não é necessário criar o banco ou usuário manualmente** no Docker. Aguarde o contêiner estar saudável (`healthy`) em `docker compose ps`.
+
+Para verificar a conexão e identificar o banco atendido pelo contêiner:
+
+```powershell
+docker compose exec db psql -U clinica_user -d clinica_agendamentos -c "SELECT current_database(), current_user;"
+```
+
+Se a porta `5432` já estiver em uso por um PostgreSQL instalado no Windows ou por outro contêiner, pare o serviço conflitante **ou escolha a opção B**. Não execute os dois servidores na mesma porta. Para investigar o Docker: `docker compose ps` e `docker compose logs db --tail 30`. Para parar o banco ao terminar, use `docker compose down`; **não use `docker compose down -v`**, pois `-v` remove também o volume com os dados.
+
+### Opção B — PostgreSQL instalado no Windows (alternativa)
+
+Se você já possui PostgreSQL 16 instalado, **não inicie o Docker Compose desse projeto**. Verifique que o serviço PostgreSQL está ativo na porta `5432`. Na pasta raiz do repositório:
+
+```powershell
+cd backend
+Copy-Item .env.example .env
+npm ci
+psql -h localhost -U postgres -d postgres
+```
+
+Após informar a senha administrativa da sua instalação, execute no terminal do `psql` **somente se esse usuário e banco ainda não existirem**:
+
+```sql
+CREATE ROLE clinica_user WITH LOGIN PASSWORD 'senha_teste_local';
+CREATE DATABASE clinica_agendamentos OWNER clinica_user;
+```
+
+Saia do `psql` com `\q`. Em `backend/.env`, ajuste a conexão para a senha criada:
+
+```dotenv
+DATABASE_URL="postgresql://clinica_user:senha_teste_local@localhost:5432/clinica_agendamentos?schema=public"
+```
+
+Conserve `FRONTEND_ORIGIN=http://localhost:5173` e `NODE_ENV=development` do arquivo de exemplo. **Se utilizar nomes, porta ou senha diferentes, ajuste `DATABASE_URL` para corresponder.** Senhas com caracteres especiais em URLs devem ser codificadas (percent-encoding). Os nomes e senhas acima são **apenas exemplos locais**, nunca credenciais para produção.
+
+Valide a conexão com o usuário da aplicação:
+
+```powershell
+psql -h localhost -U clinica_user -d clinica_agendamentos -c "SELECT current_database(), current_user;"
+```
+
+Se o PowerShell disser que `psql` não é reconhecido, use o executável do PostgreSQL pelo caminho completo, por exemplo `& 'C:\Program Files\PostgreSQL\16\bin\psql.exe' -h localhost -U postgres -d postgres` (ajuste a versão/pasta). Esse erro **não significa que o servidor PostgreSQL esteja desligado**.
+
+### Finalizar a configuração (ambas as opções)
+
+Com o banco iniciado e `backend/.env` configurado, ainda dentro da pasta `backend/`, execute:
+
+```powershell
 npx prisma migrate deploy
+npx prisma migrate status
 npm run db:generate
 npm run db:seed
-
 npm run dev
 ```
 
-A API estará disponível em **http://localhost:3333**. Confira **http://localhost:3333/health**; o retorno esperado é `{"status":"ok"}`. Mantenha esse terminal aberto. Caso o Prisma não consiga conectar ao PostgreSQL logo após subir o contêiner, aguarde alguns segundos, confira `docker compose ps` e repita `npx prisma migrate deploy`.
+- `migrate deploy` aplica as migrations versionadas e cria as tabelas; `migrate status` verifica seu estado.
+- `db:generate` gera o Prisma Client utilizado pela API.
+- `db:seed` cadastra as **12 especialidades, 14 médicos e 3 unidades fictícias**. O seed não cria pacientes; o avaliador faz isso pela tela de cadastro.
+- `npm run dev` inicia a API em **http://localhost:3333**. Abra [http://localhost:3333/health](http://localhost:3333/health) e confira `{"status":"ok"}`. Esse endpoint confirma apenas que o processo HTTP está respondendo, **não valida sozinho a conexão com o banco**.
 
-O arquivo `backend/.env.example` contém credenciais exclusivamente demonstrativas, compatíveis com o serviço PostgreSQL definido em `backend/docker-compose.yml`. **Nunca publique seu arquivo `.env` real; altere as credenciais para qualquer ambiente não demonstrativo.**
+**Soluções rápidas:** erro Prisma `P1000` indica falha de autenticação (confira usuário/senha e a instância atendendo a porta `5432`); `P1001` sugere servidor/porta inacessível. Se houver erro de permissões, confira se `clinica_user` é proprietário do banco ou possui as permissões necessárias para criar tabelas. Se o catálogo aparecer vazio, revise as migrations e execute `npm run db:seed`. **Não suba `backend/.env` para o GitHub.**
 
 ## 3. Iniciar o frontend
 
