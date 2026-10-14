@@ -37,8 +37,8 @@ As instruções abaixo usam **Windows PowerShell**. Em Linux/macOS, utilize `cp`
 ## 1. Clonar o repositório
 
 ```powershell
-git clone https://github.com/Eduardo-Taveira/Clinica-de-Sa-de.git
-cd Clinica-de-Sa-de
+git clone https://github.com/Eduardo-Taveira/Clinica-de-Saude.git
+cd Clinica-de-Saude
 ```
 
 Se o repositório estiver privado, solicite acesso antes de cloná-lo.
@@ -142,7 +142,7 @@ O backend também mantém compatibilidade com o contrato original sem os identif
 ## Estrutura de pastas
 
 ```text
-Clinica-de-Sa-de/
+Clinica-de-Saude/
 ├── backend/
 │   ├── prisma/                 # Schema, migrations e seed
 │   ├── src/
